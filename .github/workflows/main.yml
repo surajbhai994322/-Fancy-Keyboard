@@ -1,0 +1,58 @@
+
+name: Build BW Fancy Keyboard APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Extract Android project ZIP
+        shell: bash
+        run: |
+          mkdir -p _buildsrc
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname '*.zip' | head -n 1)
+          if [ -z "$ZIP_FILE" ]; then
+            echo "ERROR: Project ZIP not found in repository root."
+            exit 1
+          fi
+          unzip -q "$ZIP_FILE" -d _buildsrc
+          SETTINGS=$(find _buildsrc -name settings.gradle -print -quit)
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: settings.gradle not found in ZIP."
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$SETTINGS")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          test -f "$PROJECT_DIR/app/build.gradle"
+
+      - name: Build debug APK
+        run: gradle --no-daemon -p "$PROJECT_DIR" assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BW-Fancy-Keyboard-APK
+          path: _buildsrc/**/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
